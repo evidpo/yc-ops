@@ -9,12 +9,21 @@ from typing import Any
 import yaml
 
 CONFIG_DIR = Path(os.environ.get("YC_OPS_CONFIG_DIR", "~/.config/yc-ops")).expanduser()
-CONFIG_FILE = CONFIG_DIR / "config.yaml"
+GLOBAL_CONFIG_FILE = CONFIG_DIR / "config.yaml"
+LOCAL_CONFIG_NAME = "yc-ops.yaml"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "yc_path": "~/.yandex-cloud/bin/yc",
     "resources": [],
 }
+
+
+def _find_config_file() -> Path:
+    """Return local yc-ops.yaml if it exists in cwd, otherwise global config."""
+    local = Path.cwd() / LOCAL_CONFIG_NAME
+    if local.exists():
+        return local
+    return GLOBAL_CONFIG_FILE
 
 RESOURCE_TYPES = {
     "compute": {
@@ -45,17 +54,24 @@ RESOURCE_TYPES = {
 }
 
 
-def load_config() -> dict[str, Any]:
-    if not CONFIG_FILE.exists():
-        return DEFAULT_CONFIG.copy()
-    with open(CONFIG_FILE) as f:
-        return yaml.safe_load(f) or DEFAULT_CONFIG.copy()
+def load_config() -> tuple[dict[str, Any], Path]:
+    """Load config. Returns (config_dict, config_path)."""
+    path = _find_config_file()
+    if not path.exists():
+        return DEFAULT_CONFIG.copy(), path
+    with open(path) as f:
+        cfg = yaml.safe_load(f) or DEFAULT_CONFIG.copy()
+    return cfg, path
 
 
-def save_config(cfg: dict[str, Any]) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
+def save_config(cfg: dict[str, Any], path: Path | None = None) -> Path:
+    """Save config to path. If path is None, saves to detected location."""
+    if path is None:
+        path = _find_config_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
         yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True)
+    return path
 
 
 def get_yc_path(cfg: dict[str, Any]) -> str:

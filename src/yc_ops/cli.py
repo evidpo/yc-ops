@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from yc_ops.config import CONFIG_FILE, RESOURCE_TYPES, get_yc_path, load_config, save_config
+from yc_ops.config import LOCAL_CONFIG_NAME, RESOURCE_TYPES, get_yc_path, load_config, save_config
 from yc_ops.runner import get_resource_status, start_resource, stop_resource
 
 app = typer.Typer(help="Manage Yandex Cloud resources (VMs, databases, storage).")
@@ -18,9 +18,12 @@ console = Console()
 
 
 @app.command()
-def init() -> None:
+def init(
+    local: bool = typer.Option(False, "--local", "-l", help="Save config as yc-ops.yaml in current directory"),
+) -> None:
     """Interactive setup: configure yc path and register resources."""
-    cfg = load_config()
+    cfg, detected_path = load_config()
+    save_path = Path.cwd() / LOCAL_CONFIG_NAME if local else detected_path
 
     # yc binary
     default_yc = cfg.get("yc_path", "~/.yandex-cloud/bin/yc")
@@ -52,17 +55,18 @@ def init() -> None:
         console.print(f"  [green]+[/green] {rtype}/{name}")
 
     cfg["resources"] = resources
-    save_config(cfg)
-    console.print(f"\n[green]Config saved:[/green] {CONFIG_FILE}")
+    save_config(cfg, save_path)
+    console.print(f"\n[green]Config saved:[/green] {save_path}")
 
 
 @app.command()
 def start(name: Optional[str] = typer.Argument(None, help="Resource name (all if omitted)")) -> None:
     """Start resources."""
-    cfg = load_config()
+    cfg, path = load_config()
     resources = _filter_resources(cfg, name)
     if not resources:
         return
+    console.print(f"[dim]Config: {path}[/dim]")
     console.print("[bold]Starting resources...[/bold]")
     for r in resources:
         start_resource(cfg, r)
@@ -71,10 +75,11 @@ def start(name: Optional[str] = typer.Argument(None, help="Resource name (all if
 @app.command()
 def stop(name: Optional[str] = typer.Argument(None, help="Resource name (all if omitted)")) -> None:
     """Stop resources."""
-    cfg = load_config()
+    cfg, path = load_config()
     resources = _filter_resources(cfg, name)
     if not resources:
         return
+    console.print(f"[dim]Config: {path}[/dim]")
     console.print("[bold]Stopping resources...[/bold]")
     for r in resources:
         stop_resource(cfg, r)
@@ -83,13 +88,13 @@ def stop(name: Optional[str] = typer.Argument(None, help="Resource name (all if 
 @app.command()
 def status() -> None:
     """Show status of all registered resources."""
-    cfg = load_config()
+    cfg, path = load_config()
     resources = cfg.get("resources", [])
     if not resources:
         console.print("[yellow]No resources registered. Run: yc-ops init[/yellow]")
         return
 
-    table = Table(title="Yandex Cloud Resources")
+    table = Table(title=f"Yandex Cloud Resources ({path.name})")
     table.add_column("Name", style="cyan")
     table.add_column("Type", style="dim")
     table.add_column("Status")
@@ -111,8 +116,9 @@ def status() -> None:
 @app.command()
 def config() -> None:
     """Show current configuration."""
-    cfg = load_config()
-    console.print(f"[bold]Config file:[/bold] {CONFIG_FILE}")
+    cfg, path = load_config()
+    console.print(f"[bold]Config file:[/bold] {path}")
+    console.print(f"[bold]Source:[/bold] {'local (yc-ops.yaml)' if path.name == LOCAL_CONFIG_NAME else 'global (~/.config/yc-ops/)'}")
     console.print(f"[bold]yc path:[/bold] {get_yc_path(cfg)}")
     resources = cfg.get("resources", [])
     if resources:
@@ -126,14 +132,14 @@ def config() -> None:
 @app.command()
 def remove(name: str = typer.Argument(..., help="Resource name to remove")) -> None:
     """Remove a resource from config."""
-    cfg = load_config()
+    cfg, path = load_config()
     resources = cfg.get("resources", [])
     before = len(resources)
     cfg["resources"] = [r for r in resources if r["name"] != name]
     if len(cfg["resources"]) == before:
         console.print(f"[yellow]Resource '{name}' not found[/yellow]")
         return
-    save_config(cfg)
+    save_config(cfg, path)
     console.print(f"[green]Removed {name}[/green]")
 
 

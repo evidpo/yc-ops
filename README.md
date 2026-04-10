@@ -165,7 +165,29 @@ yc-ops remove my-vm     # убрать ресурс из конфига
 
 ## Конфигурация
 
-Конфиг хранится в `~/.config/yc-ops/config.yaml`:
+yc-ops ищет конфиг в таком порядке:
+
+1. `yc-ops.yaml` в текущей директории (per-repo конфиг)
+2. `~/.config/yc-ops/config.yaml` (глобальный конфиг)
+
+Если в корне репозитория лежит `yc-ops.yaml` — он используется автоматически. Это позволяет в разных проектах работать с разными ресурсами и облаками.
+
+### Глобальный конфиг (один на все проекты)
+
+```bash
+yc-ops init
+```
+
+Сохраняется в `~/.config/yc-ops/config.yaml`.
+
+### Per-repo конфиг (для конкретного проекта)
+
+```bash
+# Из корня вашего репозитория:
+yc-ops init --local
+```
+
+Создаст `yc-ops.yaml` в текущей директории. Формат файла:
 
 ```yaml
 yc_path: ~/.yandex-cloud/bin/yc
@@ -176,7 +198,22 @@ resources:
     type: managed-postgresql
 ```
 
-Переопределить расположение конфига: переменная окружения `YC_OPS_CONFIG_DIR`.
+Можно создать этот файл вручную — формат тот же.
+
+### Как это работает
+
+```bash
+cd ~/coding/project-a     # есть yc-ops.yaml с ресурсами project-a
+yc-ops status              # показывает ресурсы project-a
+
+cd ~/coding/project-b     # есть yc-ops.yaml с ресурсами project-b
+yc-ops status              # показывает ресурсы project-b
+
+cd ~/Desktop              # нет yc-ops.yaml
+yc-ops status              # использует глобальный конфиг
+```
+
+`yc-ops config` всегда покажет, какой конфиг используется (local или global).
 
 ---
 
